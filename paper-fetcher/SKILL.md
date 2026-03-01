@@ -11,23 +11,23 @@ argument-hint: [text|file]
 
 ---
 
-## 整体工作流程（批量编排，最少 Bash 调用）
+## 整体工作流程
 
 ```
 用户输入文本
   → Phase 1 [主Agent]: 识别论文标题，生成结构化 JSON
-  → Phase 2 [1次Bash + LLM审阅]: batch-search.sh → 搜索 + LLM 裁决低置信度候选
-  → Phase 3 [1次Bash]: batch-download.sh → 一次下载所有论文
-  → Phase 4 [1次Bash + LLM审阅]: batch-verify.sh → 提取文本 + LLM 语义验证
-  → Phase 4b [WebSearch]: 仅对 not_found / wrong_paper 补救（可选）
+  → Phase 2 [Bash + LLM审阅]: batch-search.sh 批量搜索 + LLM 裁决低置信度候选
+  → Phase 3 [Bash]: batch-download.sh 批量下载
+  → Phase 4 [Bash + LLM审阅]: batch-verify.sh 文本提取 + LLM 语义验证
+  → Phase 4b [WebSearch]: 针对未找到 / 错误论文的补救（可选）
   → Phase 5 [主Agent]: 整理分类，生成报告
 ```
 
 ### 设计原则
-- **Phase 2, 3, 4 各仅需 1 次 Bash 调用**，通过批量脚本处理全部论文
-- 批量脚本内部自动回退、重试、错误处理，无需人工干预
-- 仅对批量脚本搜索不到的论文，才用 WebSearch 兜底（Phase 4b）
-- Phase 1 & 5 由主 Agent 直接执行（需要全局视角和 LLM 能力）
+- **批量优先**：Phase 2, 3, 4 各通过一次批量脚本调用处理全部论文
+- **自动容错**：批量脚本内部自动回退、重试，无需人工干预
+- **按需补救**：仅对批量搜索无结果的论文，才用 WebSearch 兜底（Phase 4b）
+- **LLM 驱动**：Phase 1 & 5 由主 Agent 直接执行（需要全局视角和语义理解能力）
 
 ---
 
@@ -63,7 +63,7 @@ argument-hint: [text|file]
 
 ---
 
-## Phase 2: 批量搜索论文链接 [1 次 Bash 调用]
+## Phase 2: 批量搜索论文链接
 
 ### 任务
 将 Phase 1 输出的论文列表写入 JSON 文件，调用 `batch-search.sh` 一次性搜索所有论文。
@@ -71,7 +71,7 @@ argument-hint: [text|file]
 
 ### 操作步骤
 
-**Step 1: 写入论文列表 JSON**
+#### Step 1: 写入论文列表 JSON
 
 ```bash
 mkdir -p /tmp/paper-fetcher-tmp
@@ -83,7 +83,7 @@ cat > /tmp/paper-fetcher-tmp/papers.json << 'EOF'
 EOF
 ```
 
-**Step 2: 一次 Bash 调用搜索全部论文**
+#### Step 2: 调用批量搜索
 
 ```bash
 bash ~/.claude/skills/paper-fetcher/scripts/batch-search.sh /tmp/paper-fetcher-tmp/papers.json
@@ -96,7 +96,7 @@ bash ~/.claude/skills/paper-fetcher/scripts/batch-search.sh /tmp/paper-fetcher-t
 - 遵守 API 限流（arXiv 3s, Semantic Scholar 1s）
 - 输出 `/tmp/paper-fetcher-tmp/search_results.json`
 
-**Step 3: 读取搜索结果，LLM 审阅候选** ⚠️ 关键步骤
+#### Step 3: 读取搜索结果，LLM 审阅候选
 
 读取 `/tmp/paper-fetcher-tmp/search_results.json`，每篇论文的 status 有三种：
 
@@ -143,14 +143,12 @@ bash ~/.claude/skills/paper-fetcher/scripts/batch-search.sh /tmp/paper-fetcher-t
 
 ---
 
-## Phase 3: 批量下载 PDF [1 次 Bash 调用]
+## Phase 3: 批量下载 PDF
 
 ### 任务
 使用 `batch-download.sh` 一次性下载所有已找到链接的论文。
 
 ### 操作步骤
-
-**一次 Bash 调用下载全部论文：**
 
 ```bash
 bash ~/.claude/skills/paper-fetcher/scripts/batch-download.sh /tmp/paper-fetcher-tmp/search_results.json /tmp/paper-fetcher-tmp
@@ -178,15 +176,15 @@ bash ~/.claude/skills/paper-fetcher/scripts/batch-download.sh /tmp/paper-fetcher
 
 ---
 
-## Phase 4: 批量内容验证 [1 次 Bash + LLM 审阅] ⚠️ 关键步骤
+## Phase 4: 批量内容验证
 
-下载的 PDF 可能是**错误的论文**（如搜索 NLP 论文却下载到同名的数学论文）。必须验证内容。
+下载的 PDF 可能是**错误的论文**（如搜索 NLP 论文却下载到同名的数学论文），因此必须验证内容。
 
-**设计原则**：脚本只做机械文本提取，语义判断全部交给 LLM。
-- pdftotext 有 LaTeX 伪影（"N EMORI" = "NEMORI"），规则无法穷举
-- 主题相关性判断需要语义理解，关键词匹配误报率极高
+**设计原则**：脚本负责文本提取与基础归一化，语义判断全部交给 LLM。
+- PDF 文本提取常带有 LaTeX 伪影（如 "N EMORI" 实为 "NEMORI"），纯规则难以覆盖
+- 主题相关性判断需要语义理解能力，简单关键词匹配容易误判
 
-### Step 1: 文本提取 [1 次 Bash 调用]
+### Step 1: 文本提取
 
 ```bash
 bash ~/.claude/skills/paper-fetcher/scripts/batch-verify.sh /tmp/paper-fetcher-tmp/download_results.json /tmp/paper-fetcher-tmp/papers.json
@@ -214,7 +212,7 @@ bash ~/.claude/skills/paper-fetcher/scripts/batch-verify.sh /tmp/paper-fetcher-t
 ]
 ```
 
-### Step 2: LLM 语义审阅 [主 Agent 直接执行] ⚠️ 核心判断
+### Step 2: LLM 语义审阅
 
 读取 `verify_extracts.json`，对每篇 `auto_verdict == "needs_review"` 的论文：
 
@@ -331,8 +329,8 @@ bash ~/.claude/skills/paper-fetcher/scripts/batch-verify.sh /tmp/paper-fetcher-t
 | 搜索无结果 | 在 README 中标记为"未找到"，继续处理其他论文 |
 | 下载失败 | 脚本内置重试，仍失败则标记在 README 中 |
 | PDF 格式无效 | 删除文件，标记为"文件无效" |
-| **下载到错误论文** | **删除文件，用更精确的关键词重新搜索 1 次** |
-| **论文与主题不相关** | **保留文件，在 README 中标注"可能不相关"** |
+| 下载到错误论文 | 删除文件，用更精确的关键词重新搜索 1 次 |
+| 论文与主题不相关 | 保留文件，在 README 中标注"可能不相关" |
 | API 限流 | 等待 5 秒后重试，或切换到备用搜索策略 |
 | 网络超时 | 重试 1 次，超时时间设为 60 秒 |
 
@@ -351,15 +349,15 @@ bash ~/.claude/skills/paper-fetcher/scripts/batch-verify.sh /tmp/paper-fetcher-t
 
 ## Bash 调用次数汇总
 
-整个工作流中，Bash 调用次数极少，绝大部分工作在 3 次批量调用中完成：
+核心流程通过 3 次批量脚本调用完成，辅以少量文件整理操作：
 
 | 阶段 | Bash 调用 | 说明 |
 |------|-----------|------|
 | Phase 1 | 0 次 | LLM 直接识别，Write 写 JSON 文件 |
-| Phase 2 | **1 次** | `batch-search.sh` 搜索所有论文 + LLM 审阅 needs_review |
-| Phase 3 | **1 次** | `batch-download.sh` 下载所有论文 |
-| Phase 4 | **1 次** | `batch-verify.sh` 提取文本 + LLM 语义审阅 needs_review |
-| Phase 4b | 0~3 次 | 仅 WebSearch 补救 + 个别 download-paper.sh |
+| Phase 2 | 1 次 | `batch-search.sh` 批量搜索 + LLM 审阅低置信度候选 |
+| Phase 3 | 1 次 | `batch-download.sh` 批量下载 |
+| Phase 4 | 1 次 | `batch-verify.sh` 文本提取 + LLM 语义审阅 |
+| Phase 4b | 0~3 次 | WebSearch 补救 + 个别 `download-paper.sh` 单独下载 |
 | Phase 5 | 1~2 次 | mkdir + mv/cp 整理到 Desktop |
 
-**总计: 典型场景 4~6 次 Bash 调用（vs 之前每篇论文 3+ 次）**
+**典型场景总计 4~6 次 Bash 调用，与论文数量无关。**
