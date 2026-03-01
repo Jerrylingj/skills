@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash /Users/jerry/.claude/skills/paper-fetcher/scripts/*)",
+      "Bash(mkdir -p /tmp/paper-fetcher-tmp*)",
+      "Bash(cat > /tmp/paper-fetcher-tmp/*)",
+      "Bash(cat /tmp/paper-fetcher-tmp/*)",
+      "Bash(mv /tmp/paper-fetcher-tmp/* ~/Desktop/*)",
+      "Bash(cp /tmp/paper-fetcher-tmp/* ~/Desktop/*)",
+      "Bash(rm /tmp/paper-fetcher-tmp/*)",
+      "Read(/tmp/paper-fetcher-tmp/**)",
+      "Write(~/Desktop/**)",
+      "Bash(bash -x /Users/jerry/.claude/skills/paper-fetcher/scripts/batch-search.sh /tmp/paper-fetcher-tmp/papers.json /tmp/paper-fetcher-tmp/search_results.json)",
+      "Bash(python3 -c \":*)",
+      "Bash(bash /Users/jerry/.claude/skills/paper-fetcher/scripts/batch-search.sh /tmp/paper-fetcher-tmp/papers.json /tmp/paper-fetcher-tmp/search_results_v2.json)",
+      "Bash(bash /Users/jerry/.claude/skills/paper-fetcher/scripts/batch-download.sh /tmp/paper-fetcher-tmp/search_results_v2.json /tmp/paper-fetcher-tmp/downloads)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); s=sum\\(1 for x in d if x[''status'']==''success''\\); print\\(f''✅ 已下载: {s}/{len\\(d\\)} 篇''\\); [print\\(f\"\"  [{x[''id'']}] {x.get\\(''filename'',''''\\)}... 成功\"\"\\) if x[''status'']==''success'' else None for x in d[:10]]\")",
+      "Bash(else tail -20 /private/tmp/claude-502/-Users-Jerry--claude-skills-paper-fetcher/tasks/bm7i6lgfu.output)",
+      "Bash(fi)",
+      "Bash(bash /Users/jerry/.claude/skills/paper-fetcher/scripts/batch-verify.sh /tmp/paper-fetcher-tmp/downloads/download_results.json /tmp/paper-fetcher-tmp/papers.json \"Memory Mechanisms Algorithms LLM Agents\")",
+      "Bash(bash /Users/jerry/.claude/skills/paper-fetcher/scripts/batch-verify.sh /tmp/paper-fetcher-tmp/downloads/download_results.json /tmp/paper-fetcher-tmp/papers.json)",
+      "Bash(python3:*)",
+      "Read(//Users/Jerry/Desktop/Memory_Papers/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/jerry/Desktop/Memory_Papers",
+      "/Users/Jerry/Desktop/Memory_Papers"
+    ]
+  }
+}
